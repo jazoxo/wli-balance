@@ -12,3 +12,23 @@
 	 ```shell
 	 npm run nunu
 	 ```
+# To Send Wanliuno
+
+You can also send wanliuno also with this code
+
+Also open ```.env``` and complete all
+
+```shell
+
+USER_ADDRESS="Enter the your own address"
+YOUR_PRIVATE_KEY_1="Enter your private key for your address here"
+RECEIVER_ADDRESS="Enter the address of the person you are sending the wanliuno to"
+AMOUNT=10
+```
+
+After inputs of the above then run the code with
+
+```shell
+npm run send
+
+```
