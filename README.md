@@ -10,7 +10,7 @@
 - Then run the below command to see your account balance
 	 
 	 ```shell
-	 npm run nunu
+	 npm run balance
 	 ```
 # To Send Wanliuno
 
