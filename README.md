@@ -5,7 +5,9 @@
    ```shell
      npm install
 	 ```
-- When it finishes run the below command to see your account balance
+- Open the ```.env``` file and put the address in USER_ADDRESS ="put any address here"  and save it.
+
+- Then run the below command to see your account balance
 	 
 	 ```shell
 	 npm run nunu
