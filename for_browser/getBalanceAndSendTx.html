@@ -7,14 +7,24 @@
 		<script src="web3.js">
 			//source: https://cdn.jsdelivr.net/gh/ethereum/web3.js@1.0.0-beta.34/dist/
 		</script>
+		
+		<script src="jquery-3.5.1.js">
+			//source: https://code.jquery.com/jquery-3.5.1.js
+			//Need to use "Jquery-cookie plugin", and save encrypted config, in cookie, if LocalStorage is not available.
+		</script>
+		<script src="jquery.cookie-1.4.1.js">
+			//source https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js
+			//Need to save encrypted default_config in cookies, if localStorage is unavailable.
+		</script>
+		
 	<head>
 
 	<body>
 	<!--	Get current GasPrice		-->
 	Get current gas-price:
 	<table style="border: 4px double black;">
-		<tr><td><input type="button" value="getGasPrice" onclick="getGasPrise();"></td></tr>
-		<tr><td><div id="getGasPriseResult"></div></tr>
+		<tr><td><input type="button" value="getGasPrice" onclick="getGasPrice();"></td></tr>
+		<tr><td><div id="getGasPriceResult"></div></tr>
 	</table>
 	<br>
 	<br>
@@ -47,7 +57,7 @@
 													value=""																											></td></tr>
 		<tr><td>RECEIVER_ADDRESS:	</td><td><input type="text" size="100" id="RECEIVER_ADDRESS"	title="RECEIVER_ADDRESS" 							value=""		></td></tr>
 		<tr><td>AMOUNT_TO_SEND:		</td><td><input type="text" size="100" id="AMOUNT_TO_SEND"
-												title="AMOUNT_TO_SEND (COINs). Default value is large to send_all."									value=""		></td></tr>
+												title="AMOUNT_TO_SEND (COINs). Default value is large to send_all."										value=""		></td></tr>
 		<tr><td>gasPriceValue:		</td><td><input type="text" size="100" id="gasPriceValue"		title="gasPrice (Gwei)"								value=""		></td></tr>
 		<tr><td>GAS_LIMIT:			</td><td><input type="text" size="100" id="GAS_LIMIT"			title="GAS_LIMIT"									value=""		></td></tr>
 		<tr><td>NONCE:				</td><td><input type="text" size="100" id="NONCE"				title="NONCE (the nubmer of ougoing transactions)"	value=""		></td></tr>
@@ -66,147 +76,330 @@
 	</table>
 <script>
 
-//	Define the following variables:
-//var variable name		//description
-//	This one is enough to get balance by address.
-var USER_ADDRESS;		//address of coin-owner.
+var web3;	//define global web3.js-object.
 
-//	Add optional variables:
-var COIN;				//coin name
-var TICKER;				//ticker of COIN
-var CustomRPCurl;		//custom RPC URL for this coin
-var BlockExplorerURL;	//custom RPC URL for this coin
+//put the names of 11 different variables, in array "VariableNames"
+var VariableNames = [
+		//This is enough to get balance, if RPC-url specified correctly;
+		'USER_ADDRESS'		//address of coin-owner.
 
-//This variables, need to sign with privkey, and send the signed transaction.
-var USER_PRIVKEY;		//privkey from coin-owner's address. This need only to sign transaction.
-var RECEIVER_ADDRESS;	//RECEIVER_ADDRESS - address of receiver COIN.
-var AMOUNT_TO_SEND;		//COINs to send
-var gasPriceValue;		//gas price, gwei
-var GAS_LIMIT;			//gas-limit to send tx;
-var NONCE;				//Nonce for next transaction (the nubmer of outgoing transfers): https://kb.myetherwallet.com/en/transactions/what-is-nonce/
+		//	Add optional variables:
+	,	'COIN'				//coin name
+	,	'TICKER'			//ticker of COIN
+	,	'CustomRPCurl'		//custom RPC URL for this coin
+	,	'BlockExplorerURL'	//custom RPC URL for this coin
+
+		//This variables, need to sign with privkey, and send the signed transaction.
+	,	'USER_PRIVKEY'		//privkey from coin-owner's address. This need only to sign transaction.
+	,	'RECEIVER_ADDRESS'	//RECEIVER_ADDRESS - address of receiver COIN.
+	,	'AMOUNT_TO_SEND'	//COINs to send
+	,	'gasPriceValue'		//gas price, gwei
+	,	'GAS_LIMIT'			//gas-limit to send tx;
+	,	'NONCE'				//Nonce for next transaction (the nubmer of outgoing transfers): https://kb.myetherwallet.com/en/transactions/what-is-nonce/
+];
 
 var default_config = {
 	//	Wanliuno (WLI)
-	USER_ADDRESS		:	'0x_USER_ADDRESS'													,	//address of owner coins, and owner of privkey from it.
+	USER_ADDRESS		:	'0x_USER_ADDRESS'														,	//address of owner coins, and owner of privkey from it.
 	COIN				:	'Wanliuno'																,	//coin name
 	TICKER				:	'WLI'																	,	//coin ticker
 	CustomRPCurl		:	'http://127.0.0.1:18545'												,	//local node with './wanliuno --http --http.corsdomain=*'
 //	CustomRPCurl		:	'https://mask.wanli.uno/rpc'											,	//remote RPC node from here: https://github.com/wanliuno/wanliuno-ubuntu-wallet/blob/master/README.md
 	BlockExplorerURL	:	'http://explorer.wanli.uno'												,	//block-explorer, to check transaction, after broadcast it.
-	USER_PRIVKEY		:	'0x_PRIVKEY_FROM_USER_ADDRESS'										,	//private key to sign transaction - 32 bytes hex(64 hexadecimal characters) (+ optional - '0x' at start)
+	USER_PRIVKEY		:	'0x_PRIVKEY_FROM_USER_ADDRESS'											,	//private key to sign transaction - 32 bytes hex(64 hexadecimal characters) (+ optional - '0x' at start)
 	RECEIVER_ADDRESS	:	'0x_RECEIVER_ADDRESS'													,	//address of receiver coins
 	AMOUNT_TO_SEND		:	+('100500100500')														,	//Amount to send. By default set large amount, to make "send-all transfer".
 	gasPriceValue		:	+('10')																	,	//default gas price (will be changed, after receive an actual gas-price)
 	GAS_LIMIT			:	+('21000')																,	//gas-limit
 	NONCE				:	+('0') 		//convert strings to numbers									//nonce to send next tx: https://kb.myetherwallet.com/en/transactions/what-is-nonce/
 };
+//this will be saved locally, in local-storage, as JSON-string, if LocalStorage is available in browser.
 
-//input elements.
-var inputUSER_ADDRESS				=	document.getElementById('USER_ADDRESS')						;
-var inputCOIN						=	document.getElementById('COIN')								;
-var inputTICKER						=	document.getElementById('TICKER')							;
-var inputCustomRPCurl				=	document.getElementById('CustomRPCurl')						;
-var inputBlockExplorerURL			=	document.getElementById('BlockExplorerURL')					;
-var inputUSER_PRIVKEY				=	document.getElementById('USER_PRIVKEY')						;
-var inputRECEIVER_ADDRESS			=	document.getElementById('RECEIVER_ADDRESS')					;
-var inputAMOUNT_TO_SEND				=	document.getElementById('AMOUNT_TO_SEND')					;
-var inputgasPriceValue				=	document.getElementById('gasPriceValue')					;
-var inputGAS_LIMIT					=	document.getElementById('GAS_LIMIT')						;
-var inputNONCE						=	document.getElementById('NONCE')							;
-var DIVgetGasPriseResult			=	document.getElementById('getGasPriseResult')				;
+for(var i = 0; i<VariableNames.length; i++){
+	var num = ((i>=VariableNames.length-4)?'+':'');	//last 4 items - this is a numbers, so convert it to numbers, by adding +(value)
+	eval('var input'+VariableNames[i]+'		=	document.getElementById(\''+VariableNames[i]+'\');'			);		//define variables for input-elements
+	eval('input'+VariableNames[i]+'.value	=	'+num+'(default_config.'+VariableNames[i]+');'				);		//set input values for input-elements, from default-config
+}
+//define result-divs elements:
+var DIVgetGasPriceResult			=	document.getElementById('getGasPriceResult')				;
 var DIVgetBalanceResult				=	document.getElementById('getBalanceResult')					;
 var DIVSignAndSendTransactionResult	=	document.getElementById('SignAndSendTransactionResult')		;
 
-//set input values for input-elements, from default-config
-inputUSER_ADDRESS		.value		=	default_config.USER_ADDRESS				;
-inputCOIN				.value		=	default_config.COIN						;
-inputTICKER				.value		=	default_config.TICKER					;
-inputCustomRPCurl		.value		=	default_config.CustomRPCurl				;
-inputBlockExplorerURL	.value		=	default_config.BlockExplorerURL			;
-inputUSER_PRIVKEY		.value		=	default_config.USER_PRIVKEY				;
-inputRECEIVER_ADDRESS	.value		=	default_config.RECEIVER_ADDRESS			;
-inputAMOUNT_TO_SEND		.value		=	+(default_config.AMOUNT_TO_SEND	)		;	//convert strings to numbers
-inputgasPriceValue		.value		=	+(default_config.gasPriceValue	)		;
-inputGAS_LIMIT			.value		=	+(default_config.GAS_LIMIT		)		;
-inputNONCE				.value		=	+(default_config.NONCE			)		;
+function lsTest(){		//check is LocalStorage available (true/false)
+	var test = 'test';
+	try {
+		if(localStorage.getItem(test) === null){
+			localStorage.setItem(test, test);
+			localStorage.removeItem(test);
+		}
+		return true;	//or/and return true
+	} catch(e) {
+		return false;	//false
+	}
+}
+var IsLocalStorageAvailable = lsTest();		//test is LocalStorage available? true/false
+//var IsLocalStorageAvailable = false;		//false for test JqueryCookies
+
+//generate pathway for JQuery Cookies (JCpathway);
+var JCpathway = window.location.pathname.split('/');	//get pathway, and split by '/'
+JCpathway = JCpathway.slice(							//now it's array, slice this
+	1,													//remove "", at first
+	JCpathway.length									//and slice up to the end
+-												//or
+	((JCpathway[JCpathway.length-1].indexOf('.html')!==-1)?1:0) //and skip, if .html
+);
+JCpathway = '/'+JCpathway.join('/');	//join the elements to string, with '/', and add '/' in beginning of string. Now this is pathway for cookie.
+
+function cookieTest(){		//check is LocalStorage available (true/false)
+	var test = 'test';
+	try {
+		if($.cookie(test) === undefined){
+			$.cookie(test, test, {expires: 20*365});	//set test cookie
+			//$.cookie(test,null,{path: JCpathway});		//and remove the created cookie, by JCpathway, then
+			$.removeCookie(test, { path: JCpathway });
+		}
+		return true;	//or/and return true
+	} catch(e) {
+		return false;	//false
+	}
+}
+var IsJqueryCookieAvailable = cookieTest();		//test is LocalStorage available? true/false
+//var IsJqueryCookieAvailable = false;				//false, to test false.
+
+
+var passwordToEncryptDecrypt;				//define this variable, to encrypt and decrypt data in LocalStorage or Jquery cookies.
+//This variable will contains your password, client-side, up to next reload the page, and this will be deleted, after reload the page.
+
+function EncryptConfig(config){	//encrypt config by defined globally "passwordToEncryptDecrypt", and return encrypted-config-hex;
+	web3 = web3 || new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));			//use connected or connect to RPC-server.
+	return	web3.utils.utf8ToHex(								//to strict hex
+				JSON.stringify(									//json-string with cipher, after
+					web3.eth.accounts.encrypt(					//encrypt
+						web3.utils.utf8ToHex(					//converted to hex
+							config								//the utf-8 string of default config
+						),
+						passwordToEncryptDecrypt				//and encrypt this by specified, earlier, password.
+					)
+				)
+			)
+	;
+}
+
+function DecryptConfig(EncConfHex){	//Decrypt encrypted config hex from LocalStorage, or JqueryCookies, by "passwordToEncryptDecrypt", defined globally, and return config.
+	web3 = web3 || new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));			//use connected or connect to RPC-server.
+	return 	(
+				(
+						EncConfHex	!==	null							//if not null
+					&&	web3.utils.isHexStrict(EncConfHex)				//and if valid hex strict
+				)
+				? web3.utils.hexToUtf8(									//decode to UTF8
+					web3.eth.accounts.decrypt(							//the hex
+						JSON.parse(web3.utils.hexToUtf8(EncConfHex)),	//after decryption saved cipher
+						passwordToEncryptDecrypt						//and decrypt this by password
+					).privateKey										//and extract decrypted value from privateKey-property, of json-object
+				)
+				:	(													//else, if null, or invalid hex;
+						console.log('EncConfHex is null, or invalid hex', EncConfHex)	//show this
+					,	EncConfHex														//and return this as is
+				)
+			)
+	;
+}
+
+function GetSetConfig(
+	setConfig										//new config, to update, and save in LocalStorage
+)
+{
+	while(passwordToEncryptDecrypt == null){	//if null or undefined
+		passwordToEncryptDecrypt =	prompt(			'Input password to encrypt and decrypt data of default_config'
+											+'\n'+	'(which can contains your privkey).'
+											+'\n'+	'AND DO NOT LOST IT to recover config and privkey, from LocalStorage or JqueryCookies!'
+											, 		"ChageThisPasswordAndDoNotLostIt!!"
+									)
+		;
+	}
+
+	web3 = web3 || new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));		//use connected or connect to RPC-server.
+	
+	if(	IsLocalStorageAvailable === true )	//if localStorage is available
+	{
+	
+		var confFromLS = localStorage.getItem("getBalanceAndSendTx_encrypted_config");	//try to read default config-string from localStorage
+		try{
+			confFromLS =	DecryptConfig(confFromLS);//now here utf8-text of default_config.
+		}catch(e){
+			console.log(
+						'Failed to decrypt "encrypted_config" from LocalStorage. Maybe, invalid password provided. e: ', e,
+				'\n'+	'To remove encrypted_config from LocalStorage, type in console: \'localStorage.removeItem("getBalanceAndSendTx_encrypted_config");\''
+			);
+		}
+
+		setConfig =		JSON.stringify(setConfig)								//use specified config, as JSON-string
+							||	confFromLS														//or use readed value
+							||	JSON.stringify(default_config)
+		;
+		if(
+			setConfig	//and if this
+			!==					//is not
+			null				//empty
+		){
+			default_config = JSON.parse(setConfig);	//use this saved config
+
+			if(
+					(	confFromLS === null )				//if config not saved in localstorage
+				||	(	confFromLS !== setConfig	)	//or if saved config-string not equal with current config-string.
+			){			//and if not saved
+				var encrypted_config = 	EncryptConfig(setConfig);	//encrypt config by password, defined globally.
+				localStorage.setItem("getBalanceAndSendTx_encrypted_config", encrypted_config);	//save, current encrypted config in localStorage, then
+			}
+		}
+	}else if(IsJqueryCookieAvailable === true){
+		console.log(
+						'Max time for expiration of cookies is 20 years, not more!'
+			+'\n'+		'You can extract the data from cookies, and save this, to prevent lost of this data!'
+		);
+
+		var confFromJC = $.cookie("getBalanceAndSendTx_encrypted_config");			//try to read default config-string from localStorage
+		try{
+			confFromJC =	DecryptConfig(confFromJC)		;//now here utf8-text of default_config.
+		}catch(e){
+			console.log(
+						'Failed to decrypt "encrypted_config" from JqueryCookie. Maybe, invalid password provided. e: ', e,
+				'\n'+	'To remove encrypted_config from JQueryCookie, type in console: \'$.removeCookie("getBalanceAndSendTx_encrypted_config", { path: JCpathway });\''
+			);
+		}
+		
+		setConfig =		JSON.stringify(setConfig)								//use specified config, as JSON-string
+							||	confFromJC														//or use readed value
+							||	JSON.stringify(default_config)
+		;
+		if(
+			setConfig	//and if this
+			!==					//is not
+			null				//empty
+		){
+			default_config = JSON.parse(setConfig);	//use this saved config
+			if(
+					(	confFromJC === null )				//if config not saved in localstorage
+				||	(	confFromJC !== setConfig	)	//or if saved config-string not equal with current config-string.
+			){			//and if not saved
+				var encrypted_config = 	EncryptConfig(setConfig);	//encrypt config by password, defined globally.
+				$.cookie("getBalanceAndSendTx_encrypted_config", encrypted_config, {expires: 20*365}); //save, current encrypted config, in JqueryCookie, then
+			}
+		}
+	}else{
+		default_config = setConfig;	//define new config, but unable to save it.
+		console.log('LocalStorage and JqueryCookie is not available both... default_config not saved, but can be used up to next reload the page.');	//show this, and continue to use default config, from JS-code...
+	}
+//	console.log('default_config', default_config);
+	if(default_config.CustomRPCurl !== web3._provider.host){	//if default_config.CustomRPCurl changed
+		web3 = new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));			//Update web3 globally, and connect to RPC-server from CustomRPCurl.
+	}
+	//and update the values for inputs, from config-values.
+	for(var i = 0; i<VariableNames.length; i++){
+		//and set this values, from default-config, into inputs, and into the variables
+		var num = ((i>=VariableNames.length-4)?'+':'');	//last 4 items - this is a numbers, so convert it to numbers, by adding +(value)
+		eval('input'+VariableNames[i]+'		.value	=	'+VariableNames[i]+'			=	'+num+'(default_config.'+VariableNames[i]+')			;');
+	}
+}
+//Usage:
+console.log(
+			'To import config, and save it, type in console.log \'GetSetConfig({setConfigObject})\''
+);
+GetSetConfig();					//write default_config in localstorage, or load it from LocalStorage, and apply this (run this on load)
+//GetSetConfig({setConfigObject});		//write specified config, in localStorage.
 
 //update values, when this was changed, in input;
 var update_values = function(){
-//	variable_name		=		use the value from input			or	use a default value				;	//description
-	USER_ADDRESS		=		inputUSER_ADDRESS		.value		||
-	(
-		default_config.USER_ADDRESS === ''
-			? '0x00000000000000000000000000000000'
-			: default_config.USER_ADDRESS
-	);																										//address of coin-owner.
-	COIN				=		inputCOIN				.value		||	default_config.COIN				;	//coin name
-	TICKER				=		inputTICKER				.value		||	default_config.TICKER			;	//ticker of COIN
-	CustomRPCurl		=		inputCustomRPCurl		.value		||	default_config.CustomRPCurl		;	//custom RPC URL for this coin
-	BlockExplorerURL	=		inputBlockExplorerURL	.value		||	default_config.BlockExplorerURL	;	//link on block-explorer
-	USER_PRIVKEY		=		inputUSER_PRIVKEY		.value		||
-	(
-		default_config.USER_PRIVKEY === '0x RECEIVER_ADDRESS'
-			? '0x0000000000000000000000000000000000000000000000000000000000000000'
-			: default_config.USER_PRIVKEY																//privkey from coin-owner's address. This need only to sign transaction.
-	);
-	RECEIVER_ADDRESS	=		inputRECEIVER_ADDRESS	.value		||
-	(
-		default_config.RECEIVER_ADDRESS === '0x RECEIVER_ADDRESS'
-			? '0x00000000000000000000000000000000'
-			: default_config.RECEIVER_ADDRESS
-	);																										//RECEIVER_ADDRESS - address of receiver COIN.
-	AMOUNT_TO_SEND		=		+(inputAMOUNT_TO_SEND	.value)		||	default_config.AMOUNT_TO_SEND	;	//COINs to send
-	gasPriceValue		=		+(inputgasPriceValue	.value)		||	default_config.gasPriceValue	;	//gas price, gwei
-	GAS_LIMIT			=		+(inputGAS_LIMIT		.value)		||	default_config.GAS_LIMIT		;	//gas-limit to send tx;  //to numbers
-	NONCE				=		+(inputNONCE			.value)		||	default_config.NONCE			;	//Nonce for next tx.
+	for(var i = 0; i<VariableNames.length; i++){
+		//and set this values, from default-config, into inputs, and into the variables
+		var num = ((i>=VariableNames.length-4)?'+':'');	//last 4 items - this is a numbers, so convert it to numbers, by adding +(value)
+		eval('default_config.'+VariableNames[i]+'	=	'+num+'(input'+VariableNames[i]+'.value);');	//update config from input-value
+	}
+	GetSetConfig(default_config);	//and save new config, in localStorage.
 };
 
 //get actual gas-price
-var getGasPrise = function(){
+var getGasPrice = function(){
 	update_values();
 	//set default values, or values from input-fields
 	//(if this was been changed in HTML, in value property for input-tags);
 	
-	var web3 = new Web3(new Web3.providers.HttpProvider(CustomRPCurl));			//connect to RPC-server.	
-	web3.eth.getGasPrice(
-		function(e, r) {
-			console.log('r', r, 'e', e);										//show result and error (if exists)
-			r = r || (default_config.gasPriceValue*1000000000)			;		//use received gasPrice (wei), or default (gwei -> to wei)
-			console.log(r);														//show result in console
-			DIVgetGasPriseResult.innerHTML =
-				(r + ' Wei = ' + (r/1000000000) + ' Gwei ')				;		//append result to div.
-			gasPriceValue =	inputgasPriceValue.value =	(r/1000000000)	;		//set gas price in the input.
-			
+	web3 = web3 || new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));			//use connected or connect to RPC-server.
+	
+	web3.eth.net.isListening()
+   .then(
+		function(r){
+			console.log('Sucessfully connected to RPC-server '+default_config.CustomRPCurl+'.');
+
+			web3.eth.getGasPrice(
+				function(e, r) {	//e - error, r - result
+					r = r || (default_config.gasPriceValue*1000000000)			;		//use received gasPrice (wei), or default (gwei -> to wei)
+					DIVgetGasPriceResult.innerHTML =
+						(r + ' Wei = ' + (r/1000000000) + ' Gwei ')				;		//append result to div.
+					default_config.gasPriceValue =	inputgasPriceValue.value =	(r/1000000000)	;		//set gas price in the input.
+					console.log('Current gas price in the network: ', DIVgetGasPriceResult.innerHTML);
+				}
+			)
+			.then(
+				function(){
+					if(web3.utils.isAddress(default_config.USER_ADDRESS)){
+						getTxCount();	//update this too, when valid address was been specified.
+					}else{
+						console.log('Unable to get number of transactions, by address. Input the valid \'USER_ADDRESS\'');	//else, address is invalid.
+					}
+				}
+			).catch(
+				function(e){
+					console.log('unable to get gas-price. e: ', e);
+				}
+			)
+			;
+		}
+	)
+   .catch(
+		function(e){
+			console.log('No connection to RPC-server. Something went wrong: '+ e);
 		}
 	);
 };
-//getGasPrise();	//run this on load, to get actual gas-price. (will be runned on click button to check balance, not on load)
+//getGasPrice();	//run this on load, to get actual gas-price. (will be runned on click button to check balance, not on load)
 
 var outgoingTransactionsNumber;		//define this variable, to save the number of last transactions, by address (need to generate a correct nonce);
-var generatedNonce;					//define this variable, to save the generated nonce.
 
 function generateNonce(savetxCount){											//save last txCount, generate nonce, and save it too.
-	var web3 = new Web3(new Web3.providers.HttpProvider(CustomRPCurl));			//connect to RPC-server.
+	web3 = web3 || new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));			//use connected or connect to RPC-server.
 	savetxCount = savetxCount || 0;												//use specified txCount, or 0, by default, if undefined;
 	outgoingTransactionsNumber = savetxCount;									//save the number of outgoing transactions by address.
-	generatedNonce = web3.utils.toHex(outgoingTransactionsNumber.toString());	//then generate the nonce for next transaction, and save it.
-	inputNONCE.value = generatedNonce;
+	inputNONCE.value = default_config.NONCE = web3.utils.toHex(
+		outgoingTransactionsNumber.toString()									//then generate the nonce for next transaction, and save it.
+	);
+	console.log('Generated nonce, for outgoing transfer: '+default_config.NONCE);	//show the nonce.
 }
 
 //get number of last transactions by address
 var getTxCount = function(
 	setUSER_ADDRESS		//specify address (optional)
 ){
-	setUSER_ADDRESS = setUSER_ADDRESS || USER_ADDRESS;						//use specified address, or default
+	setUSER_ADDRESS = setUSER_ADDRESS || default_config.USER_ADDRESS;						//use specified address, or default
 	
-	var web3 = new Web3(new Web3.providers.HttpProvider(CustomRPCurl));		//connect to RPC-server.	
+	web3 = web3 || Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl));		//use connected or connect to RPC-server.	
 	
 	if(web3.utils.isAddress(setUSER_ADDRESS)){
 		web3.eth.getTransactionCount(											//and get the number of outgoing transactions
 			setUSER_ADDRESS,													//by defined address
 			function(err, txCount){
-				console.log('txCount', txCount, 'err', err);					//show in console, the number of outgoing transactions, and error (if exists)
-				generateNonce(txCount);											//and save the number of outgoing transactions, generate nonce, for next transaction, and save it too.
+				//console.log('txCount', txCount, 'err', err);					//show in console, the number of outgoing transactions, and error (if exists)
+				console.log(
+					(
+						(err===null)
+						?	(setUSER_ADDRESS+' have '+txCount+' transactions.')
+						:	('Unable to get number of transactions, by address '+setUSER_ADDRESS+', err: '+err)
+					)+'.\n'+
+					'This value need to generate correct nonce, for outgoing transfers, so this is requested too.'
+				);
+				generateNonce(txCount);											//and then, save the number of outgoing transactions,
+																				//generate the nonce, for next transaction, and save it too.
 			}
 		);
 	}
@@ -220,18 +413,15 @@ var balance;	//Define this variable, to save balance by address.
 var getBalance = function(
 	addressToCheck	//specify new address, or use hardcoded USER_ADDRESS, by default, if not specified.
 ){
-	update_values();
-	
-	getGasPrise();	//update this too, when address specified
-	getTxCount();	//update this too, when address specified.
-	
-	var web3 = new Web3(new Web3.providers.HttpProvider(CustomRPCurl));		//connect to RPC-server.
-	addressToCheck = addressToCheck || USER_ADDRESS;						//use specified address, or already defined.
+	getGasPrice();	//get current gas-price, and txcount, generate nonce from this.
+	web3 = web3 || new Web3(new Web3.providers
+							.HttpProvider(default_config.CustomRPCurl));		//use connected or connect to RPC-server.
+	addressToCheck = addressToCheck || default_config.USER_ADDRESS;				//use specified address, or already defined.
 	if(web3.utils.isAddress(addressToCheck)){
 		web3.eth.getBalance(													//and get balance
 			addressToCheck,														//by address
 			function(err, wei){
-				console.log('wei', wei, 'err', err);							//show response, and error (if exists)
+//				console.log('wei', wei, 'err', err);							//show response, and error (if exists)
 				balance = +(web3.utils.fromWei(wei, 'ether'));					//save balance into defined variable
 				var BalanceByAddress = (
 					"Owner of address: "+ addressToCheck						//generate the result-string
@@ -239,7 +429,7 @@ var getBalance = function(
 					+ TICKER + " on " + COIN + " Network."
 				);
 				console.log(BalanceByAddress);									//show this string, in console
-				DIVgetBalanceResult.innerHTML = BalanceByAddress;					//append result to div.
+				DIVgetBalanceResult.innerHTML = BalanceByAddress;				//append result to div.
 			}
 		);
 	}
@@ -262,14 +452,14 @@ var SignAndSendTransaction = function(
 ){
 	update_values();	//define undefined variables from input, or from default-values object.
 	
-	var web3 = new Web3(new Web3.providers.HttpProvider(CustomRPCurl))			;		//connect to RPC-server.	
-	OwnerAddress		=	OwnerAddress			||	USER_ADDRESS			;		//address of coin-owner.
-	OwnerPrivKey		=	OwnerPrivKey			||	USER_PRIVKEY			;		//privkey from coin-owner's address. This need only to sign transaction.
-	ReceiverAddress		=	ReceiverAddress			||	RECEIVER_ADDRESS		;		//RECEIVER_ADDRESS - address of receiver COIN.
-	setAmount			=	+(setAmount				||	AMOUNT_TO_SEND		)	;		//COINs to send
-	setGasPrice			=	+(setGasPrice			||	gasPrice			)	;		//gas price, gwei
-	setGasLimit			=	+(setGasLimit			||	GAS_LIMIT			)	;		//gas-limit to send tx;
-	setBlockExplorerURL	=	+(setBlockExplorerURL	||	BlockExplorerURL	)	;		//optional - block-explorer to see tx;
+	web3 = web3 || new Web3(new Web3.providers.HttpProvider(default_config.CustomRPCurl))	;		//use connected or connect to RPC-server.	
+	OwnerAddress		=	OwnerAddress			||	default_config.USER_ADDRESS			;		//address of coin-owner.
+	OwnerPrivKey		=	OwnerPrivKey			||	default_config.USER_PRIVKEY			;		//privkey from coin-owner's address. This need only to sign transaction.
+	ReceiverAddress		=	ReceiverAddress			||	default_config.RECEIVER_ADDRESS		;		//RECEIVER_ADDRESS - address of receiver COIN.
+	setAmount			=	+(setAmount				||	default_config.AMOUNT_TO_SEND	)	;		//COINs to send
+	setGasPrice			=	+(setGasPrice			||	default_config.gasPriceValue	)	;		//gas price, gwei
+	setGasLimit			=	+(setGasLimit			||	default_config.GAS_LIMIT		)	;		//gas-limit to send tx;
+	setBlockExplorerURL	=	+(setBlockExplorerURL	||	default_config.BlockExplorerURL	)	;		//optional - block-explorer to see tx;
 
 	var Tx					=	ethereumjs.Tx;																		//create new transaction object.
 	var OwnerPrivKeyBytes	=	ethereumjs.Buffer.Buffer.from(OwnerPrivKey.slice(OwnerPrivKey.length-64), 'hex');	//convert privkeyHex -> to bytes;
@@ -314,7 +504,7 @@ var SignAndSendTransaction = function(
 			var txObject = {
 				nonce:	(
 								setNonce																//use specified nonce
-							||	generatedNonce															//or use saved and computed nonce from received tx-count
+							||	default_config.NONCE													//or use saved and computed nonce from received tx-count
 						)																				//this nonce is optional,
 																										//and this can be used just to overwrite the pending transactions...
 				,
